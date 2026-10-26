@@ -1,0 +1,3 @@
+Imagen generada con la herramienta integrada imagegen para probar el reconocimiento.
+Valores esperados: 1001 2; 1002 1; 2001 3; 3001 2. Total: 8 unidades.
+No constituye una prueba de precisión del OCR. Los códigos deben existir como productos activos y debe seleccionarse un cliente activo.

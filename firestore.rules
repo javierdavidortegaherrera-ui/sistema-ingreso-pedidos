@@ -1,0 +1,91 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function propietario(uid) { return request.auth != null && request.auth.uid == uid; }
+    function codigoValido(codigo) { return codigo is string && codigo.matches('^[A-Z0-9][A-Z0-9_-]{0,29}$'); }
+    function nombreValido(nombre) { return nombre is string && nombre.size() > 0 && nombre.size() <= 100; }
+    function estadoValido(estado) { return estado in ['Registrado', 'Preparando', 'Entregado', 'Cancelado']; }
+    match /usuarios/{uid}/clientes/{codigo} {
+      allow read: if propietario(uid);
+      allow create, update: if propietario(uid)
+        && request.resource.data.keys().hasOnly(['codigo', 'nombre', 'telefono', 'activo'])
+        && codigoValido(codigo) && request.resource.data.codigo == codigo
+        && nombreValido(request.resource.data.nombre)
+        && request.resource.data.telefono is string && request.resource.data.telefono.size() <= 25
+        && request.resource.data.activo is bool;
+    }
+    match /usuarios/{uid}/productos/{codigo} {
+      allow read: if propietario(uid);
+      allow create, update: if propietario(uid)
+        && request.resource.data.keys().hasOnly(['codigo', 'nombre', 'categoria', 'activo', 'precioCentavos', 'moneda'])
+        && (!('moneda' in request.resource.data) || request.resource.data.moneda in ['HNL', 'USD'])
+        && codigoValido(codigo) && request.resource.data.codigo == codigo
+        && nombreValido(request.resource.data.nombre)
+        && request.resource.data.categoria in ['Limpieza del hogar', 'Aseo personal', 'Cuidado de la piel', 'Cabello', 'Otros productos domésticos']
+        && (!('precioCentavos' in request.resource.data) || request.resource.data.precioCentavos == null || (request.resource.data.precioCentavos is int && request.resource.data.precioCentavos > 0 && request.resource.data.precioCentavos <= 100000000))
+        && request.resource.data.activo is bool;
+    }
+    match /usuarios/{uid}/pedidos/{id} {
+      allow read: if propietario(uid);
+      allow create: if propietario(uid)
+        && request.resource.data.keys().hasOnly(['id', 'clienteCodigo', 'clienteNombre', 'fecha', 'lineas', 'origen', 'notas', 'estado', 'confirmado', 'fotoBase64', 'fotoRuta', 'creadoEn', 'moneda'])
+        && (!('moneda' in request.resource.data) || request.resource.data.moneda == 'HNL')
+        && request.resource.data.id == id && id.size() == 36
+        && request.resource.data.confirmado == true && request.resource.data.estado == 'Registrado'
+        && codigoValido(request.resource.data.clienteCodigo)
+        && nombreValido(request.resource.data.clienteNombre)
+        && get(/databases/$(database)/documents/usuarios/$(uid)/clientes/$(request.resource.data.clienteCodigo)).data.activo == true
+        && request.resource.data.fecha is string && request.resource.data.fecha.size() <= 40
+        && request.resource.data.creadoEn == request.time
+        && request.resource.data.lineas is list && request.resource.data.lineas.size() > 0 && request.resource.data.lineas.size() <= 100
+        && request.resource.data.origen in ['Manual', 'Fotografía revisada']
+        && request.resource.data.notas is string && request.resource.data.notas.size() <= 1000
+        && request.resource.data.fotoBase64 == null
+        && (request.resource.data.fotoRuta == null || request.resource.data.fotoRuta == 'usuarios/' + uid + '/pedidos/' + id + '/original.jpg');
+      allow update: if propietario(uid)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['estado'])
+        && (request.resource.data.estado != 'Cancelado' || !existsAfter(/databases/$(database)/documents/usuarios/$(uid)/facturas/$(id)))
+        && estadoValido(request.resource.data.estado);
+    }
+    match /usuarios/{uid}/contadores/comprobantes {
+      allow read: if propietario(uid);
+      allow create, update: if propietario(uid)
+        && request.resource.data.keys().hasOnly(['ultimoNumero', 'ultimoPedidoId'])
+        && request.resource.data.ultimoNumero is int
+        && request.resource.data.ultimoNumero == (exists(/databases/$(database)/documents/usuarios/$(uid)/contadores/comprobantes) ? resource.data.ultimoNumero + 1 : 1)
+        && request.resource.data.ultimoPedidoId is string
+        && getAfter(/databases/$(database)/documents/usuarios/$(uid)/facturas/$(request.resource.data.ultimoPedidoId)).data.numero == request.resource.data.ultimoNumero;
+    }
+    match /usuarios/{uid}/facturas/{pedidoId} {
+      function pedido() { return get(/databases/$(database)/documents/usuarios/$(uid)/pedidos/$(pedidoId)).data; }
+      function contador() { return getAfter(/databases/$(database)/documents/usuarios/$(uid)/contadores/comprobantes).data; }
+      allow read: if propietario(uid);
+      allow create: if propietario(uid)
+        && request.resource.data.keys().hasOnly(['pedidoId', 'numero', 'fecha', 'clienteCodigo', 'clienteNombre', 'lineas', 'metodoPago', 'recibidoCentavos', 'descuentoCentavos', 'referencia', 'moneda', 'subtotalCentavos', 'totalCentavos', 'cambioCentavos', 'pagoConfirmado', 'creadoEn'])
+        && request.resource.data.pedidoId == pedidoId
+        && pedido().estado != 'Cancelado'
+        && request.resource.data.clienteCodigo == pedido().clienteCodigo
+        && request.resource.data.clienteNombre == pedido().clienteNombre
+        && request.resource.data.numero is int && request.resource.data.numero > 0
+        && request.resource.data.numero == contador().ultimoNumero
+        && contador().ultimoPedidoId == pedidoId
+        && request.resource.data.numero == (exists(/databases/$(database)/documents/usuarios/$(uid)/contadores/comprobantes) ? get(/databases/$(database)/documents/usuarios/$(uid)/contadores/comprobantes).data.ultimoNumero + 1 : 1)
+        && request.resource.data.fecha is string && request.resource.data.fecha.size() <= 40
+        && request.resource.data.creadoEn == request.time
+        && request.resource.data.moneda == 'HNL' && request.resource.data.pagoConfirmado == true
+        && request.resource.data.lineas is list && request.resource.data.lineas.size() == pedido().lineas.size()
+        && request.resource.data.lineas.size() > 0 && request.resource.data.lineas.size() <= 100
+        && request.resource.data.subtotalCentavos is int && request.resource.data.subtotalCentavos > 0 && request.resource.data.subtotalCentavos <= 99999999999999
+        && request.resource.data.descuentoCentavos is int && request.resource.data.descuentoCentavos >= 0 && request.resource.data.descuentoCentavos < request.resource.data.subtotalCentavos
+        && request.resource.data.totalCentavos is int && request.resource.data.cambioCentavos is int
+        && request.resource.data.totalCentavos == request.resource.data.subtotalCentavos - request.resource.data.descuentoCentavos
+        && request.resource.data.recibidoCentavos is int && request.resource.data.recibidoCentavos >= request.resource.data.totalCentavos && request.resource.data.recibidoCentavos <= 99999999999999
+        && request.resource.data.referencia is string && request.resource.data.referencia.size() <= 80
+        && ((request.resource.data.metodoPago == 'efectivo' && request.resource.data.cambioCentavos == request.resource.data.recibidoCentavos - request.resource.data.totalCentavos)
+          || (request.resource.data.metodoPago in ['debito', 'credito', 'transferencia'] && request.resource.data.referencia.size() > 0 && request.resource.data.recibidoCentavos == request.resource.data.totalCentavos && request.resource.data.cambioCentavos == 0));
+      // Los comprobantes emitidos no se editan ni se eliminan.
+    }
+    // Sin borrado físico desde la aplicación: se conserva el historial.
+    match /{document=**} { allow read, write: if false; }
+  }
+}

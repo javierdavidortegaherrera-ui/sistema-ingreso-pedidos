@@ -1,0 +1,31 @@
+SISTEMA DE INGRESO DE PEDIDOS - PROTOTIPO 1.0.0
+
+Autor: Javier David Ortega Herrera
+Uso: evaluación de la aplicación; no distribución comercial definitiva.
+Requiere Android 7.0 o superior.
+
+INSTALAR
+1. Descarga Pedidos-Prototipo-Cliente.apk y comprueba su SHA-256 si corresponde.
+2. Abre el APK en el teléfono y permite instalar desde la aplicación que lo abrió.
+3. Si ya tienes una versión firmada con la misma clave, instala como actualización.
+   No desinstales para actualizar: desinstalar puede eliminar los datos locales.
+4. La firma es de desarrollo. Una versión con otra firma requiere un plan de migración.
+
+PROBAR CON DATOS FICTICIOS
+1. Crea al menos un cliente y un producto activos o carga los ejemplos.
+2. Ingresa el pedido manualmente o adjunta/toma una fotografía.
+3. Compara la foto, corrige códigos/cantidades y marca cada revisión.
+4. Confirma y guarda el pedido.
+5. Desde el detalle, factura el pedido con precios en lempiras y registra el pago.
+6. Emite el comprobante interno y prueba compartir/imprimir el PDF.
+
+ALCANCE
+El modo predeterminado guarda localmente. No incluye respaldo automático,
+sincronización ni una base remota configurada. Desinstalar o borrar los datos
+puede eliminarlos. Usa datos ficticios durante la evaluación.
+El OCR puede equivocarse, especialmente en manuscritos; revisa siempre la hoja.
+Los pagos solo se registran: no hay cobros bancarios ni procesamiento de tarjetas.
+El comprobante no es una factura fiscal autorizada por el SAR.
+Nunca introduzcas números de tarjeta, CVV ni credenciales bancarias.
+
+Las licencias y atribuciones se adjuntan con el APK.
